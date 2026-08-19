@@ -45,25 +45,72 @@ claude --plugin-dir ~/Projects/skills/ship
 |---|---|
 | [ship](ship/skills/ship/SKILL.md) | Autonomous delivery pipeline: plan review (2 lenses) → implementation → PR review/fix loop with per-round reports |
 
+## General flow
+
+The delivery flow has exactly two human gates; everything between them runs
+autonomously, with a compact status report after every phase and review round:
+
+```
+ you (gate 1)          /ship — autonomous pipeline               you (gate 2)
+┌─────────────┐   ┌───────────────────────────────────────┐   ┌──────────────┐
+│ brainstorm  │   │ Phase 1  plan review gate (2 lenses)  │   │ read final   │
+│ the design, ├──▶│ Phase 2  implementation (TDD/commits) ├──▶│ report,      │
+│ write the   │   │ Phase 3  PR + review/fix loop         │   │ approve and  │
+│ plan        │   │ Phase 4  handoff report, then STOP    │   │ merge the PR │
+└─────────────┘   └───────────────────────────────────────┘   └──────────────┘
+```
+
+1. **Gate 1 — design (human).** Start a task as usual (Jira ticket or a task
+   described in chat), answer the brainstorming questions, and let the
+   planning flow produce a written implementation plan.
+2. **Phase 1 — plan review gate.** Exactly two review rounds with different
+   lenses: round 1 checks requirements coverage against the ticket/task text,
+   round 2 checks technical feasibility against the actual codebase. A fresh
+   fixer agent applies accepted fixes to the plan after each round.
+3. **Phase 2 — implementation.** The reviewed plan is executed task by task
+   in fresh subagents — TDD per task, one commit per task, branch and commit
+   naming enforced.
+4. **Phase 3 — PR + review/fix loop.** The PR is created, then the loop runs:
+   fresh reviewer agent posts findings as inline comments → fresh fixer agent
+   verifies each finding, fixes, tests, pushes, and replies to every
+   comment — until a round confirms zero findings or the round cap (default 4)
+   is reached.
+5. **Gate 2 — approval (human).** Read the final report, approve, and merge.
+   The pipeline never merges, approves, or force-pushes.
+
+The main session acts as a thin **orchestrator**: it only dispatches agents,
+judges convergence from their structured returns, and emits the reports.
+Every heavy step (review, triage, fixing) runs in a fresh subagent with no
+memory of the implementation reasoning — that independence is the point.
+
+## Skills the pipeline builds on
+
+`ship` is an orchestration layer, not a monolith — each stage delegates to an
+existing skill:
+
+| Skill | Where in the flow | Role |
+|---|---|---|
+| [superpowers:brainstorming](https://github.com/obra/superpowers) | Gate 1, before `/ship` | Design Q&A that validates the spec with the human |
+| [superpowers:writing-plans](https://github.com/obra/superpowers) | Gate 1, before `/ship` | Produces the implementation plan doc that `/ship` discovers and reviews |
+| [superpowers:subagent-driven-development](https://github.com/obra/superpowers) (or executing-plans) | Phase 2 | Executes the plan task-by-task in fresh subagents |
+| [superpowers:test-driven-development](https://github.com/obra/superpowers) | Phase 2 | TDD discipline for every implementation task |
+| code-review (built-in) | Phase 3, each review round | Reviewer agent runs `code-review <effort> <pr-url> --comment` to post inline PR findings |
+| [superpowers:receiving-code-review](https://github.com/obra/superpowers) | Phase 3, each fix round | Fixer agent verifies every finding in the code before acting — a reviewer claim is not a fact |
+| claude-md-management:revise-claude-md | After merge | Final report reminds you to capture session learnings in CLAUDE.md |
+
+Other dependencies: the **Atlassian MCP server** (optional — fetches Jira
+tickets as the requirements source; without it, free-form task text or the
+plan doc serve the same role) and the **GitHub CLI** (`gh`) for PR creation,
+comment watermarking, and replies.
+
 ## Using ship
 
 `/ship` automates the delivery flow between two human gates: you answer the
 design questions before it starts, and you approve/merge the PR at the end.
 Everything in between — plan review, implementation, PR creation, review/fix
 rounds — runs autonomously, with a compact status report after every phase and
-review round. It never merges, approves, or force-pushes.
-
-Typical flow:
-
-1. Start a task as usual (Jira ticket or a task described in chat), go through
-   brainstorming, and let the planning flow write the implementation plan.
-2. Run `/ship`.
-3. It reviews the plan twice (requirements lens vs the ticket, then technical
-   lens vs the codebase), implements the plan (TDD, commit per task, branch
-   and commit naming enforced), opens the PR, then loops: fresh reviewer
-   agent → verify findings → fix → push → reply to every comment — until a
-   round confirms zero findings or the round cap is reached.
-4. Read the final report, approve, and merge.
+review round (see [General flow](#general-flow) above). It never merges,
+approves, or force-pushes.
 
 Invocations:
 
