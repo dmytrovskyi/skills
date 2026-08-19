@@ -1,0 +1,16 @@
+{
+  "name": "dmytrovskyi",
+  "owner": {
+    "name": "Viacheslav Dmytrovskyi"
+  },
+  "description": "A collection of Claude Code skills",
+  "plugins": [
+    {
+      "name": "ship",
+      "source": "./ship",
+      "description": "Autonomous delivery pipeline: plan review (2 lenses) → implementation → PR review/fix loop with per-round reports",
+      "version": "1.0.0",
+      "category": "workflow"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "ship",
+  "description": "Autonomous delivery pipeline: plan review (2 lenses) → implementation → PR review/fix loop with per-round reports",
+  "version": "1.0.0",
+  "author": {
+    "name": "Viacheslav Dmytrovskyi"
+  }
+}
